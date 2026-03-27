@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🍳 Bot de Recetas "Cocinando Rico" para Facebook - V1.2 (ESTADO ROBUSTO)
-Maneja estado_bot.json vacío o corrupto
+🥗 Bot de Recetas FITNESS & SALUDABLE para Facebook - V2.0
+Recetas en español: proteicas, dietas, asados, saludable
 """
 
 import requests
@@ -11,6 +11,7 @@ import os
 import re
 import hashlib
 import sys
+import random
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from PIL import Image, ImageDraw, ImageFont
@@ -23,20 +24,16 @@ import textwrap
 try:
     from dotenv import load_dotenv
     load_dotenv()
-    print("✅ Variables de entorno cargadas")
 except ImportError:
-    print("⚠️ python-dotenv no instalado")
+    pass
 
 # APIs
 THEMEALDB_API = "https://www.themealdb.com/api/json/v1/1"
+SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY')  # Opcional, para más recetas
 
 # Facebook
 FB_PAGE_ID = os.getenv('FB_PAGE_ID')
 FB_ACCESS_TOKEN = os.getenv('FB_ACCESS_TOKEN')
-
-# Edamam (opcional)
-EDAMAM_APP_ID = os.getenv('EDAMAM_APP_ID')
-EDAMAM_API_KEY = os.getenv('EDAMAM_API_KEY')
 
 # Rutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,101 +44,140 @@ HISTORIAL_PATH = os.getenv('HISTORIAL_PATH', os.path.join(DATA_DIR, 'historial_r
 ESTADO_PATH = os.getenv('ESTADO_PATH', os.path.join(DATA_DIR, 'estado_bot.json'))
 
 # Tiempos
-TIEMPO_ENTRE_PUBLICACIONES = int(os.getenv('TIEMPO_ENTRE_PUBLICACIONES', '1'))
+TIEMPO_ENTRE_PUBLICACIONES = int(os.getenv('TIEMPO_ENTRE_PUBLICACIONES', '360'))  # 6 horas
 UMBRAL_SIMILITUD = 0.75
 MAX_HISTORIAL = 100
 
 # ═══════════════════════════════════════════════════════════════
-# LOGGING
+# CATEGORÍAS FITNESS/SALUDABLE EN ESPAÑOL
+# ═══════════════════════════════════════════════════════════════
+
+CATEGORIAS_FITNESS = {
+    'proteicas': ['Beef', 'Chicken', 'Lamb', 'Pork', 'Seafood', 'Goat'],
+    'saludables': ['Vegetarian', 'Vegan', 'Salad', 'Side'],
+    'bajas_calorias': ['Seafood', 'Chicken', 'Vegetarian'],
+    'asados': ['Beef', 'Chicken', 'Lamb', 'Pork'],
+    'postres_saludables': ['Dessert']  # Ocasional
+}
+
+PALABRAS_CLAVE_PROTEICAS = [
+    'pollo', 'carne', 'res', 'cerdo', 'cordero', 'pescado', 'marisco',
+    'huevo', 'proteina', 'proteico', 'asado', 'parrilla', 'filete',
+    'pechuga', 'musculo', 'fitness', 'gym', 'entrenamiento'
+]
+
+PALABRAS_CLAVE_SALUDABLES = [
+    'ensalada', 'verdura', 'vegetal', 'dieta', 'light', 'bajo caloria',
+    'nutritivo', 'saludable', 'fit', 'natural', 'organico', 'integral'
+]
+
+# ═══════════════════════════════════════════════════════════════
+# TRADUCCIONES DE INGREDIENTES Y TÉRMINOS
+# ═══════════════════════════════════════════════════════════════
+
+TRADUCCIONES_INGREDIENTES = {
+    'chicken': 'pollo', 'beef': 'carne de res', 'pork': 'cerdo',
+    'lamb': 'cordero', 'fish': 'pescado', 'salmon': 'salmón',
+    'rice': 'arroz', 'pasta': 'pasta', 'potato': 'papa',
+    'tomato': 'tomate', 'onion': 'cebolla', 'garlic': 'ajo',
+    'oil': 'aceite', 'salt': 'sal', 'pepper': 'pimienta',
+    'cheese': 'queso', 'milk': 'leche', 'butter': 'mantequilla',
+    'egg': 'huevo', 'flour': 'harina', 'sugar': 'azúcar',
+    'water': 'agua', 'wine': 'vino', 'lemon': 'limón',
+    'herbs': 'hierbas', 'spices': 'especias', 'yogurt': 'yogur',
+    'cream': 'crema', 'sauce': 'salsa', 'broth': 'caldo',
+    'stock': 'caldo', 'grilled': 'a la parrilla', 'baked': 'horneado',
+    'fried': 'frito', 'roasted': 'asado', 'steamed': 'al vapor',
+    'fresh': 'fresco', 'dried': 'seco', 'chopped': 'picado',
+    'sliced': 'en láminas', 'minced': 'picado fino', 'ground': 'molido'
+}
+
+TRADUCCIONES_CATEGORIAS = {
+    'Beef': 'Carne de Res 🥩',
+    'Chicken': 'Pollo Proteico 🍗',
+    'Dessert': 'Postre Saludable 🍮',
+    'Lamb': 'Cordero 🍖',
+    'Miscellaneous': 'Variedad 🍽️',
+    'Pasta': 'Pasta Integral 🍝',
+    'Pork': 'Cerdo 🥓',
+    'Seafood': 'Mariscos Proteicos 🦐',
+    'Side': 'Acompañamiento Saludable 🥗',
+    'Starter': 'Entrada Light 🥙',
+    'Vegan': 'Vegano Fitness 🌱',
+    'Vegetarian': 'Vegetariano Proteico 🥬',
+    'Breakfast': 'Desayuno Energético 🍳',
+    'Goat': 'Cabra 🐐',
+    'Salad': 'Ensalada Nutritiva 🥗'
+}
+
+TRADUCCIONES_AREAS = {
+    'American': 'Americana 🇺🇸',
+    'British': 'Británica 🇬🇧',
+    'Canadian': 'Canadiense 🇨🇦',
+    'Chinese': 'China 🇨🇳',
+    'Croatian': 'Croata 🇭🇷',
+    'Dutch': 'Holandesa 🇳🇱',
+    'Egyptian': 'Egipcia 🇪🇬',
+    'Filipino': 'Filipina 🇵🇭',
+    'French': 'Francesa 🇫🇷',
+    'Greek': 'Griega 🇬🇷',
+    'Indian': 'India 🇮🇳',
+    'Irish': 'Irlandesa 🇮🇪',
+    'Italian': 'Italiana 🇮🇹',
+    'Jamaican': 'Jamaicana 🇯🇲',
+    'Japanese': 'Japonesa 🇯🇵',
+    'Kenyan': 'Keniana 🇰🇪',
+    'Malaysian': 'Malaya 🇲🇾',
+    'Mexican': 'Mexicana 🇲🇽',
+    'Moroccan': 'Marroquí 🇲🇦',
+    'Polish': 'Polaca 🇵🇱',
+    'Portuguese': 'Portuguesa 🇵🇹',
+    'Russian': 'Rusa 🇷🇺',
+    'Spanish': 'Española 🇪🇸',
+    'Thai': 'Tailandesa 🇹🇭',
+    'Tunisian': 'Tunecina 🇹🇳',
+    'Turkish': 'Turca 🇹🇷',
+    'Ukrainian': 'Ucraniana 🇺🇦',
+    'Vietnamese': 'Vietnamita 🇻🇳'
+}
+
+# ═══════════════════════════════════════════════════════════════
+# FUNCIONES DE UTILIDAD
 # ═══════════════════════════════════════════════════════════════
 
 def log(mensaje, tipo='info'):
     iconos = {
         'info': 'ℹ️', 'exito': '✅', 'error': '❌', 'advertencia': '⚠️', 
-        'cocina': '👨‍🍳', 'debug': '🔍', 'facebook': '📘', 'api': '🌐'
+        'cocina': '👨‍🍳', 'debug': '🔍', 'facebook': '📘', 'api': '🌐',
+        'proteina': '💪', 'salud': '🥗'
     }
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"[{timestamp}] {iconos.get(tipo, 'ℹ️')} {mensaje}", flush=True)
 
-# ═══════════════════════════════════════════════════════════════
-# FUNCIONES DE ARCHIVOS - CORREGIDAS PARA MANEJAR ARCHIVOS VACÍOS
-# ═══════════════════════════════════════════════════════════════
-
 def cargar_json_seguro(ruta, default=None):
-    """
-    Carga JSON de forma segura, manejando:
-    - Archivo no existe
-    - Archivo vacío
-    - Archivo con solo espacios
-    - JSON corrupto
-    """
     if default is None:
         default = {}
-    
-    # Si no existe, crear con default
     if not os.path.exists(ruta):
-        log(f"📁 Creando archivo nuevo: {os.path.basename(ruta)}", 'info')
         guardar_json(ruta, default)
         return default.copy()
-    
-    # Verificar si es directorio
-    if os.path.isdir(ruta):
-        log(f"❌ Error: {ruta} es un directorio", 'error')
-        return default.copy()
-    
     try:
         with open(ruta, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        # VERIFICAR SI ESTÁ VACÍO O SOLO TIENE ESPACIOS
-        if not content or not content.strip():
-            log(f"📄 Archivo vacío: {os.path.basename(ruta)}", 'advertencia')
-            log(f"   ↳ Inicializando...", 'info')
-            guardar_json(ruta, default)
-            return default.copy()
-        
-        # Intentar parsear JSON
-        try:
-            data = json.loads(content)
-            return data
-        except json.JSONDecodeError as e:
-            log(f"❌ JSON corrupto: {e}", 'error')
-            
-            # Backup del archivo corrupto
-            try:
-                backup = f"{ruta}.corrupto.{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                os.rename(ruta, backup)
-                log(f"💾 Backup: {backup}", 'advertencia')
-            except:
-                pass
-            
-            # Crear nuevo archivo limpio
-            guardar_json(ruta, default)
-            return default.copy()
-            
-    except PermissionError:
-        log(f"❌ Sin permisos: {ruta}", 'error')
-        return default.copy()
-    except Exception as e:
-        log(f"❌ Error leyendo {ruta}: {e}", 'error')
+            if not content or not content.strip():
+                guardar_json(ruta, default)
+                return default.copy()
+            return json.loads(content)
+    except:
+        guardar_json(ruta, default)
         return default.copy()
 
 def guardar_json(ruta, datos):
-    """Guarda JSON de forma segura"""
     try:
-        directorio = os.path.dirname(ruta)
-        if directorio:
-            os.makedirs(directorio, exist_ok=True)
-        
-        temp_path = f"{ruta}.tmp"
-        with open(temp_path, 'w', encoding='utf-8') as f:
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
+        with open(ruta, 'w', encoding='utf-8') as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
-        
-        os.replace(temp_path, ruta)
         return True
-        
-    except Exception as e:
-        log(f"❌ Error guardando {ruta}: {e}", 'error')
+    except:
         return False
 
 def generar_hash(texto):
@@ -155,6 +191,50 @@ def calcular_similitud(s1, s2):
     if not s1 or not s2:
         return 0.0
     return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
+
+# ═══════════════════════════════════════════════════════════════
+# TRADUCTOR AUTOMÁTICO
+# ═══════════════════════════════════════════════════════════════
+
+def traducir_texto(texto_ingles):
+    """Traduce texto básico de inglés a español"""
+    if not texto_ingles:
+        return ""
+    
+    texto = texto_ingles.lower()
+    
+    # Reemplazar ingredientes comunes
+    for ingles, espanol in TRADUCCIONES_INGREDIENTES.items():
+        texto = re.sub(r'\b' + ingles + r'\b', espanol, texto)
+    
+    # Reemplazar términos de cocción
+    texto = texto.replace('grilled', 'a la parrilla')
+    texto = texto.replace('baked', 'horneado')
+    texto = texto.replace('fried', 'frito')
+    texto = texto.replace('roasted', 'asado')
+    texto = texto.replace('steamed', 'al vapor')
+    texto = texto.replace('fresh', 'fresco')
+    texto = texto.replace('chopped', 'picado')
+    texto = texto.replace('minced', 'picado fino')
+    texto = texto.replace('sliced', 'en láminas')
+    
+    # Capitalizar primera letra
+    texto = texto.capitalize()
+    
+    return texto
+
+def traducir_categoria(categoria_en):
+    return TRADUCCIONES_CATEGORIAS.get(categoria_en, categoria_en)
+
+def traducir_area(area_en):
+    return TRADUCCIONES_AREAS.get(area_en, area_en)
+
+def traducir_ingrediente(nombre_ing):
+    nombre_lower = nombre_ing.lower()
+    for ingles, espanol in TRADUCCIONES_INGREDIENTES.items():
+        if ingles in nombre_lower:
+            return nombre_ing.replace(ingles, espanol).replace(ingles.capitalize(), espanol.capitalize())
+    return nombre_ing
 
 # ═══════════════════════════════════════════════════════════════
 # GESTIÓN DE RECETAS
@@ -174,11 +254,9 @@ class GestorRecetas:
             'estadisticas': {'total_publicadas': 0}
         }
         h = cargar_json_seguro(HISTORIAL_PATH, default)
-        
         for k in default:
             if k not in h:
                 h[k] = default[k]
-        
         self.limpiar_historial_antiguo(h)
         return h
     
@@ -186,7 +264,6 @@ class GestorRecetas:
         try:
             ahora = datetime.now()
             indices_mantener = []
-            
             for i, ts in enumerate(h.get('timestamps', [])):
                 try:
                     fecha = datetime.fromisoformat(ts)
@@ -194,74 +271,71 @@ class GestorRecetas:
                         indices_mantener.append(i)
                 except:
                     continue
-            
             for key in ['ids_recetas', 'hashes', 'timestamps', 'nombres', 'categorias']:
                 if key in h and isinstance(h[key], list):
                     h[key] = [h[key][i] for i in indices_mantener if i < len(h[key])]
-                    
-        except Exception as e:
-            log(f"⚠️ Error limpiando: {e}", 'advertencia')
+        except:
+            pass
     
     def receta_ya_publicada(self, id_receta, nombre):
         hash_nombre = generar_hash(nombre)
-        
         if id_receta in self.historial.get('ids_recetas', []):
             return True, "id_duplicado"
-        
         if hash_nombre in self.historial.get('hashes', []):
             return True, "hash_duplicado"
-        
         for nombre_hist in self.historial.get('nombres', []):
             sim = calcular_similitud(nombre, nombre_hist)
             if sim >= UMBRAL_SIMILITUD:
                 return True, f"similitud_{sim:.2f}"
-        
         return False, "nueva"
     
     def guardar_receta(self, id_receta, nombre, categoria):
         hash_nombre = generar_hash(nombre)
-        
         self.historial['ids_recetas'].append(id_receta)
         self.historial['hashes'].append(hash_nombre)
         self.historial['timestamps'].append(datetime.now().isoformat())
         self.historial['nombres'].append(nombre)
         self.historial['categorias'].append(categoria)
-        
         stats = self.historial.get('estadisticas', {})
         stats['total_publicadas'] = stats.get('total_publicadas', 0) + 1
         self.historial['estadisticas'] = stats
-        
         for key in ['ids_recetas', 'hashes', 'timestamps', 'nombres', 'categorias']:
             if len(self.historial[key]) > MAX_HISTORIAL:
                 self.historial[key] = self.historial[key][-MAX_HISTORIAL:]
-        
-        if guardar_json(HISTORIAL_PATH, self.historial):
-            log(f"💾 Total: {stats['total_publicadas']} recetas", 'exito')
+        guardar_json(HISTORIAL_PATH, self.historial)
+        log(f"💾 Total: {stats['total_publicadas']} recetas", 'exito')
 
 # ═══════════════════════════════════════════════════════════════
-# OBTENCIÓN DE RECETAS
+# OBTENCIÓN DE RECETAS - ENFOQUE FITNESS
 # ═══════════════════════════════════════════════════════════════
+
+def obtener_receta_fitness():
+    """Obtiene receta enfocada en proteínas y saludable"""
+    # Priorizar categorías proteicas
+    categorias_prioridad = ['Beef', 'Chicken', 'Seafood', 'Lamb', 'Pork']
+    
+    for categoria in categorias_prioridad:
+        receta = obtener_receta_por_categoria(categoria)
+        if receta:
+            log(f"   💪 Receta proteica encontrada: {categoria}", 'proteina')
+            return receta
+    
+    # Si no hay proteicas, buscar cualquiera
+    return obtener_receta_aleatoria()
 
 def obtener_receta_aleatoria():
     try:
         log("🌐 TheMealDB...", 'api')
         url = f"{THEMEALDB_API}/random.php"
         response = requests.get(url, timeout=15)
-        
         if response.status_code != 200:
-            log(f"   ❌ HTTP {response.status_code}", 'error')
             return None
-        
         data = response.json()
-        
         if not data or not data.get('meals'):
-            log("   ❌ Sin recetas", 'error')
             return None
-        
         receta = procesar_receta_themealdb(data['meals'][0])
         log(f"   ✅ {receta['nombre'][:50]}", 'exito')
         return receta
-        
     except Exception as e:
         log(f"   ❌ Error: {e}", 'error')
         return None
@@ -271,11 +345,8 @@ def obtener_receta_por_categoria(categoria):
         url = f"{THEMEALDB_API}/filter.php?c={categoria}"
         response = requests.get(url, timeout=15)
         data = response.json()
-        
         if not data or not data.get('meals'):
             return None
-        
-        import random
         receta_basica = random.choice(data['meals'])
         return obtener_detalles_receta(receta_basica['idMeal'])
     except Exception as e:
@@ -287,7 +358,6 @@ def obtener_detalles_receta(id_receta):
         url = f"{THEMEALDB_API}/lookup.php?i={id_receta}"
         response = requests.get(url, timeout=15)
         data = response.json()
-        
         if data and data.get('meals'):
             return procesar_receta_themealdb(data['meals'][0])
         return None
@@ -298,7 +368,7 @@ def obtener_detalles_receta(id_receta):
 def procesar_receta_themealdb(datos):
     receta = {
         'id': datos.get('idMeal'),
-        'nombre': datos.get('strMeal', 'Sin nombre'),
+        'nombre': traducir_texto(datos.get('strMeal', 'Receta Fitness')),
         'categoria': datos.get('strCategory', 'Plato'),
         'area': datos.get('strArea', 'Internacional'),
         'instrucciones': datos.get('strInstructions', ''),
@@ -311,17 +381,17 @@ def procesar_receta_themealdb(datos):
     for i in range(1, 21):
         ingrediente = datos.get(f'strIngredient{i}')
         medida = datos.get(f'strMeasure{i}')
-        
         if ingrediente and str(ingrediente).strip():
+            nombre_esp = traducir_ingrediente(str(ingrediente).strip())
             receta['ingredientes'].append({
-                'nombre': str(ingrediente).strip(),
+                'nombre': nombre_esp,
                 'cantidad': str(medida).strip() if medida else 'al gusto'
             })
     
     return receta
 
 # ═══════════════════════════════════════════════════════════════
-# GENERACIÓN DE CONTENIDO
+# GENERACIÓN DE CONTENIDO EN ESPAÑOL
 # ═══════════════════════════════════════════════════════════════
 
 def formatear_ingredientes(ingredientes):
@@ -329,45 +399,85 @@ def formatear_ingredientes(ingredientes):
         return "• Ingredientes no disponibles"
     
     lineas = []
-    for ing in ingredientes[:10]:
+    for ing in ingredientes[:12]:
         cantidad = ing.get('cantidad', '')
         nombre = ing.get('nombre', '')
+        emoji = obtener_emoji_ingrediente(nombre)
         
         if cantidad and cantidad.lower() != 'al gusto':
-            lineas.append(f"• {cantidad} {nombre}")
+            lineas.append(f"{emoji} {cantidad} {nombre}")
         else:
-            lineas.append(f"• {nombre}")
+            lineas.append(f"{emoji} {nombre}")
     
     return '\n'.join(lineas)
+
+def obtener_emoji_ingrediente(ingrediente):
+    ingrediente_lower = ingrediente.lower()
+    emojis = {
+        'pollo': '🍗', 'carne': '🥩', 'res': '🥩', 'cerdo': '🥓',
+        'cordero': '🍖', 'pescado': '🐟', 'salmón': '🐟', 'atún': '🐟',
+        'huevo': '🥚', 'huevo': '🥚', 'proteina': '💪',
+        'arroz': '🍚', 'pasta': '🍝', 'papa': '🥔', 'patata': '🥔',
+        'tomate': '🍅', 'cebolla': '🧅', 'ajo': '🧄',
+        'aceite': '🛢️', 'sal': '🧂', 'pimienta': '🌶️',
+        'queso': '🧀', 'leche': '🥛', 'mantequilla': '🧈',
+        'harina': '🌾', 'azúcar': '🍬', 'agua': '💧',
+        'vino': '🍷', 'limón': '🍋', 'limon': '🍋',
+        'yogur': '🥣', 'yogurt': '🥣', 'crema': '🥛',
+        'ensalada': '🥗', 'verdura': '🥬', 'vegetal': '🥕',
+        'pollo': '🍗', 'pechuga': '🍗', 'filete': '🥩',
+        'parrilla': '🔥', 'asado': '🔥', 'horno': '♨️',
+        'default': '•'
+    }
+    
+    for key, emoji in emojis.items():
+        if key in ingrediente_lower:
+            return emoji
+    return emojis['default']
 
 def formatear_instrucciones(instrucciones):
     if not instrucciones:
         return "Instrucciones no disponibles."
     
+    # Traducir instrucciones básicas
     texto = instrucciones.replace('\r', '\n').strip()
-    pasos = [l.strip() for l in texto.split('\n') if l.strip() and len(l.strip()) > 20]
+    
+    # Dividir en pasos
+    pasos = []
+    lineas = [l.strip() for l in texto.split('\n') if l.strip() and len(l.strip()) > 20]
+    
+    for linea in lineas:
+        linea_limpia = re.sub(r'^\d+[\.\)]\s*', '', linea)
+        # Traducir términos comunes
+        linea_limpia = traducir_texto(linea_limpia)
+        if len(linea_limpia) > 20:
+            pasos.append(linea_limpia)
     
     if len(pasos) < 2:
         oraciones = [o.strip() for o in texto.split('.') if len(o.strip()) > 30]
-        pasos = oraciones
+        pasos = [traducir_texto(o) for o in oraciones]
     
     pasos_formateados = []
-    for i, paso in enumerate(pasos[:4], 1):
-        if len(paso) > 180:
-            paso = paso[:177] + "..."
+    for i, paso in enumerate(pasos[:5], 1):
+        if len(paso) > 200:
+            paso = paso[:197] + "..."
         pasos_formateados.append(f"{i}. {paso}")
     
     return '\n\n'.join(pasos_formateados)
 
 def construir_publicacion(receta):
     nombre = receta['nombre']
-    categoria = receta.get('categoria', 'Plato')
-    area = receta.get('area', 'Internacional')
+    categoria = traducir_categoria(receta.get('categoria', 'Plato'))
+    area = traducir_area(receta.get('area', 'Internacional'))
+    
+    # Calcular proteínas estimadas (simple)
+    proteinas_estimadas = estimar_proteinas(receta)
     
     lineas = [
-        f"🍳 {nombre}",
+        f"💪 {nombre}",
         "",
         f"📍 {area} • {categoria}",
+        f"🥩 Proteínas estimadas: ~{proteinas_estimadas}g",
         "",
         "📝 INGREDIENTES:",
         formatear_ingredientes(receta.get('ingredientes', [])),
@@ -376,7 +486,8 @@ def construir_publicacion(receta):
         formatear_instrucciones(receta.get('instrucciones', '')),
         "",
         "─────────────────",
-        "💡 ¿La preparaste? Cuéntanos en los comentarios 👇",
+        "💡 Tip Fitness: Ideal para ganar masa muscular 💪",
+        "🔥 Comparte si te gusta esta receta proteica",
     ]
     
     if receta.get('fuente') and receta['fuente'] != 'TheMealDB':
@@ -385,41 +496,62 @@ def construir_publicacion(receta):
     
     return '\n'.join(lineas)
 
+def estimar_proteinas(receta):
+    """Estima proteínas basado en ingredientes principales"""
+    ingredientes = receta.get('ingredientes', [])
+    proteinas = 0
+    
+    proteicos = {
+        'pollo': 25, 'carne': 26, 'res': 26, 'cerdo': 25, 'cordero': 25,
+        'pescado': 22, 'salmón': 20, 'atún': 30, 'huevo': 13,
+        'queso': 25, 'yogur': 10, 'leche': 8
+    }
+    
+    for ing in ingredientes:
+        nombre = ing.get('nombre', '').lower()
+        for prot, cantidad in proteicos.items():
+            if prot in nombre:
+                proteinas += cantidad
+                break
+    
+    return max(proteinas, 15)  # Mínimo 15g
+
 def generar_hashtags(receta):
     categoria = receta.get('categoria', '').lower()
     area = receta.get('area', '').lower()
+    nombre = receta.get('nombre', '').lower()
     
-    hashtags = ['#CocinandoRico', '#Recetas', '#CocinaCasera']
+    # Hashtags base fitness
+    hashtags = [
+        '#CocinaFitness', '#ComidaSaludable', '#RecetasProteicas',
+        '#Fitness', '#Gym', '#Proteina', '#ComidaFit'
+    ]
     
-    if 'dessert' in categoria or 'postre' in categoria:
-        hashtags.extend(['#Postres', '#Reposteria'])
-    elif 'chicken' in categoria:
-        hashtags.extend(['#Pollo'])
-    elif 'beef' in categoria or 'carne' in categoria:
-        hashtags.extend(['#Carne'])
-    elif 'pasta' in categoria:
-        hashtags.extend(['#Pasta'])
-    elif 'seafood' in categoria:
-        hashtags.extend(['#Mariscos'])
-    elif 'vegetarian' in categoria or 'vegan' in categoria:
-        hashtags.extend(['#Vegetariano'])
+    # Hashtags por tipo
+    if any(p in categoria for p in ['beef', 'chicken', 'lamb', 'pork', 'goat']):
+        hashtags.extend(['#CarneProteica', '#Musculo', '#GanarMasa', '#Asado', '#Parrilla'])
+    elif any(p in categoria for p in ['seafood', 'fish']):
+        hashtags.extend(['#PescadoProteico', '#Omega3', '#Saludable'])
+    elif any(p in categoria for p in ['vegetarian', 'vegan']):
+        hashtags.extend(['#VegetarianoFit', '#PlantBased', '#VeganProtein'])
+    else:
+        hashtags.extend(['#RecetaFit', '#Dieta', '#Nutricion'])
     
-    areas_map = {
-        'italian': '#CocinaItaliana',
-        'mexican': '#CocinaMexicana',
-        'spanish': '#CocinaEspañola',
-        'chinese': '#CocinaChina',
-        'french': '#CocinaFrancesa',
-        'indian': '#CocinaHindu',
-        'american': '#CocinaAmericana'
+    # Hashtags por área
+    areas_fit = {
+        'italian': '#CocinaItalianaFit',
+        'mexican': '#ComidaMexicanaFit',
+        'spanish': '#CocinaEspañolaFit',
+        'american': '#FitnessUSA',
+        'asian': '#ComidaAsiaticaFit'
     }
     
-    for key, tag in areas_map.items():
+    for key, tag in areas_fit.items():
         if key in area:
             hashtags.append(tag)
             break
     
-    return ' '.join(hashtags)
+    return ' '.join(hashtags[:8])  # Máximo 8 hashtags para no saturar
 
 # ═══════════════════════════════════════════════════════════════
 # IMÁGENES
@@ -488,39 +620,51 @@ def descargar_imagen_receta(url_imagen):
 
 def crear_imagen_receta(nombre_receta, categoria, area):
     try:
+        # Paletas fitness
         paletas = {
-            'Dessert': ('#8B4513', '#FFD700', '#FFF8DC'),
-            'Seafood': ('#1E3A5F', '#87CEEB', '#E0F6FF'),
-            'Vegetarian': ('#228B22', '#90EE90', '#F0FFF0'),
+            'Beef': ('#8B0000', '#FF6B6B', '#FFE0E0'),      # Rojo intenso
+            'Chicken': ('#FFA500', '#FFD93D', '#FFF5E0'),    # Naranja energía
+            'Seafood': ('#1E3A5F', '#4ECDC4', '#E0F7FA'),    # Azul oceano
+            'Lamb': ('#800080', '#DA70D6', '#F0E0F0'),      # Púrpura
+            'Pork': ('#FF69B4', '#FFB6C1', '#FFF0F5'),      # Rosa
+            'Vegetarian': ('#228B22', '#90EE90', '#F0FFF0'), # Verde salud
             'Vegan': ('#2E8B57', '#98FB98', '#F5FFFA'),
-            'Chicken': ('#DAA520', '#FFE4B5', '#FFFAF0'),
-            'Beef': ('#8B0000', '#FFA07A', '#FFE4E1'),
-            'Pasta': ('#FF6347', '#FFD700', '#FFFACD'),
+            'Dessert': ('#8B4513', '#D2691E', '#F5E6D3'),   # Marrón
         }
         
-        bg_color, accent_color, text_bg = paletas.get(categoria, ('#FF6B35', '#FFE66D', '#FFF5EE'))
+        bg_color, accent_color, text_bg = paletas.get(categoria, ('#2C3E50', '#E74C3C', '#ECF0F1'))
         
         img = Image.new('RGB', (1200, 630), color=bg_color)
         draw = ImageDraw.Draw(img)
         
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 52)
-            font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
         except:
             font_title = font_sub = font_small = ImageFont.load_default()
         
-        draw.rectangle([(0, 0), (1200, 15)], fill=accent_color)
-        draw.rectangle([(50, 150), (1150, 480)], fill=text_bg)
+        # Barra superior
+        draw.rectangle([(0, 0), (1200, 12)], fill=accent_color)
         
-        titulo = textwrap.fill(nombre_receta[:80], width=28)
-        draw.text((100, 200), titulo, font=font_title, fill='#333333')
+        # Área de texto
+        draw.rectangle([(50, 140), (1150, 490)], fill=text_bg)
         
-        info = f"🍳 {area} • {categoria}"
-        draw.text((100, 400), info, font=font_sub, fill=bg_color)
+        # Título
+        titulo = textwrap.fill(nombre_receta[:70], width=30)
+        draw.text((100, 180), titulo, font=font_title, fill='#2C3E50')
         
+        # Info
+        info = f"💪 {area} • {categoria}"
+        draw.text((100, 380), info, font=font_sub, fill=bg_color)
+        
+        # Proteínas badge
+        draw.rectangle([(100, 430), (400, 470)], fill=accent_color)
+        draw.text((250, 450), "ALTO EN PROTEÍNAS", font=font_small, fill='white', anchor="mm")
+        
+        # Footer
         draw.rectangle([(0, 580), (1200, 630)], fill='#2C3E50')
-        draw.text((600, 605), "Cocinando Rico 🥘 Recetas deliciosas", 
+        draw.text((600, 605), "🔥 Cocina Fitness | Recetas Proteicas", 
                  font=font_small, fill='white', anchor="mm")
         
         hash_nombre = generar_hash(nombre_receta)[:10]
@@ -548,7 +692,7 @@ def publicar_facebook(texto, imagen_path, hashtags):
     
     log(f"📘 Publicando...", 'facebook')
     
-    mensaje = f"{texto}\n\n{hashtags}\n\n— 🍳 Cocinando Rico | Recetas deliciosas"
+    mensaje = f"{texto}\n\n{hashtags}\n\n— 💪 Cocina Fitness | Recetas Proteicas para tu Entrenamiento"
     
     if len(mensaje) > 2200:
         lineas = texto.split('\n')
@@ -558,7 +702,7 @@ def publicar_facebook(texto, imagen_path, hashtags):
                 texto_cortado += linea + "\n"
             else:
                 break
-        mensaje = f"{texto_cortado.rstrip()}\n\n[Continúa en comentarios]\n\n{hashtags}\n\n— 🍳 Cocinando Rico"
+        mensaje = f"{texto_cortado.rstrip()}\n\n[Ver receta completa]\n\n{hashtags}\n\n— 💪 Cocina Fitness"
     
     if not os.path.exists(imagen_path):
         log(f"❌ Imagen no existe", 'error')
@@ -587,22 +731,15 @@ def publicar_facebook(texto, imagen_path, hashtags):
         return False
 
 # ═══════════════════════════════════════════════════════════════
-# FLUJO PRINCIPAL - USANDO cargar_json_seguro
+# FLUJO PRINCIPAL
 # ═══════════════════════════════════════════════════════════════
 
 def verificar_tiempo():
-    """CORREGIDO: Usa cargar_json_seguro para manejar archivo vacío"""
-    # ANTES (fallaba con archivo vacío):
-    # estado = cargar_json(ESTADO_PATH, {'ultima_publicacion': None})
-    
-    # AHORA (maneja archivo vacío/corrupto):
     estado = cargar_json_seguro(ESTADO_PATH, {'ultima_publicacion': None})
-    
     ultima = estado.get('ultima_publicacion')
     
-    # Si no hay última publicación, permitir ejecutar
     if not ultima:
-        log("📝 Primera ejecución (sin historial previo)", 'info')
+        log("📝 Primera ejecución", 'info')
         return True
     
     try:
@@ -615,23 +752,21 @@ def verificar_tiempo():
         else:
             log(f"⏱️ Tiempo OK: {minutos:.0f}min", 'info')
             return True
-            
-    except Exception as e:
-        log(f"⚠️ Error en fecha '{ultima}': {e}", 'advertencia')
-        return True  # Permitir por precaución
+    except:
+        return True
 
 def seleccionar_receta(gestor):
-    categorias = ['Dessert', 'Chicken', 'Pasta', 'Seafood', 'Vegetarian', 'Beef']
-    max_intentos = 20
+    """Selecciona receta enfocada en fitness/proteínas"""
+    max_intentos = 25
     
-    log(f"🔍 Buscando receta...", 'cocina')
+    log(f"🔍 Buscando receta FITNESS...", 'proteina')
     
     for intento in range(max_intentos):
-        receta = obtener_receta_aleatoria()
-        
-        if not receta and intento > 5:
-            cat = categorias[intento % len(categorias)]
-            receta = obtener_receta_por_categoria(cat)
+        # 70% probabilidad de receta proteica
+        if random.random() < 0.7:
+            receta = obtener_receta_fitness()
+        else:
+            receta = obtener_receta_aleatoria()
         
         if not receta:
             continue
@@ -650,7 +785,15 @@ def seleccionar_receta(gestor):
         if len(receta.get('ingredientes', [])) < 2:
             continue
         
-        log(f"   ✅ {nombre}", 'exito')
+        # Verificar que sea proteica o saludable
+        categoria = receta.get('categoria', '').lower()
+        es_proteica = any(p in categoria for p in ['beef', 'chicken', 'seafood', 'lamb', 'pork'])
+        
+        if es_proteica:
+            log(f"   💪 RECETA PROTEICA: {nombre}", 'exito')
+        else:
+            log(f"   🥗 Receta saludable: {nombre}", 'exito')
+        
         return receta
     
     log("❌ No se encontró receta", 'error')
@@ -658,7 +801,7 @@ def seleccionar_receta(gestor):
 
 def main():
     print("\n" + "="*70)
-    print("🍳 COCINANDO RICO BOT - V1.2")
+    print("💪 COCINA FITNESS BOT - V2.0")
     print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*70)
     
@@ -687,26 +830,21 @@ def main():
     
     log("✅ Configuración válida", 'exito')
     
-    # Verificar tiempo (AHORA MANEJA ESTADO VACÍO)
     if not verificar_tiempo():
         return False
     
-    # Inicializar
     gestor = GestorRecetas()
     stats = gestor.historial.get('estadisticas', {})
     log(f"📊 Historial: {stats.get('total_publicadas', 0)} recetas")
     
-    # Seleccionar receta
     receta = seleccionar_receta(gestor)
     if not receta:
         return False
     
-    # Preparar contenido
     log(f"📝 {receta['nombre'][:50]}...")
     texto = construir_publicacion(receta)
     hashtags = generar_hashtags(receta)
     
-    # Procesar imagen
     log("🖼️ Imagen...")
     imagen_path = None
     
@@ -717,33 +855,26 @@ def main():
         imagen_path = crear_imagen_receta(
             receta['nombre'],
             receta.get('categoria', 'Plato'),
-            receta.get('area', 'Internacional')
+            traducir_area(receta.get('area', 'Internacional'))
         )
     
     if not imagen_path:
         log("❌ Sin imagen", 'error')
         return False
     
-    # Publicar
     exito = publicar_facebook(texto, imagen_path, hashtags)
     
-    # Limpieza
     try:
         if os.path.exists(imagen_path):
             os.remove(imagen_path)
     except:
         pass
     
-    # Guardar estado
     if exito:
         gestor.guardar_receta(receta['id'], receta['nombre'], receta.get('categoria', 'General'))
-        
-        # GUARDAR ESTADO CON TIMESTAMP
         nuevo_estado = {'ultima_publicacion': datetime.now().isoformat()}
-        if guardar_json(ESTADO_PATH, nuevo_estado):
-            log("💾 Estado guardado", 'exito')
-        
-        log("🎉 ¡RECETA PUBLICADA!", 'exito')
+        guardar_json(ESTADO_PATH, nuevo_estado)
+        log("🎉 ¡RECETA FITNESS PUBLICADA!", 'exito')
         return True
     else:
         log("❌ Falló", 'error')
