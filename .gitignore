@@ -1,1 +1,6 @@
-
+# .gitignore
+.env
+.env.local
+data/*.json
+__pycache__/
+*.pyc
