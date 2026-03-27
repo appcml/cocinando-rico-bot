@@ -2,12 +2,11 @@ name: 🤖 Cocinando Rico Bot
 
 on:
   schedule:
-    # Ejecutar cada 6 horas
-    - cron: '0 */6 * * *'
-  workflow_dispatch:  # Permite ejecución manual
+    - cron: '0 */6 * * *'  # Cada 6 horas
+  workflow_dispatch:  # Manual
 
 jobs:
-  publicar-receta:
+  publicar:
     runs-on: ubuntu-latest
     
     steps:
@@ -30,11 +29,3 @@ jobs:
         EDAMAM_APP_ID: ${{ secrets.EDAMAM_APP_ID }}
         EDAMAM_API_KEY: ${{ secrets.EDAMAM_API_KEY }}
       run: python bot_recetas.py
-    
-    - name: 💾 Guardar historial
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: historial-recetas
-        path: data/
-        retention-days: 30
