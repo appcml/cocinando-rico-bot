@@ -2,40 +2,30 @@ name: 🤖 Cocinando Rico Bot
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Cada 6 horas
-  workflow_dispatch:        # Manual también
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   publicar-receta:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 📥 Checkout código
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    
-    - name: 📦 Instalar dependencias
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests Pillow python-dotenv
-    
-    - name: 🍳 Ejecutar Bot de Recetas
-      env:
-        FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-        FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
-        TIEMPO_ENTRE_PUBLICACIONES: 1
-      run: |
-        echo "⏰ Iniciando bot..."
-        python bot_recetas.py
-    
-    - name: 💾 Guardar historial (opcional)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: historial-recetas
-        path: data/
-        retention-days: 30
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests Pillow python-dotenv
+      
+      - name: Ejecutar Bot
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          TIEMPO_ENTRE_PUBLICACIONES: 1
+        run: python bot_recetas.py
