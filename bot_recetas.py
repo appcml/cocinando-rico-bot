@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🥗 Bot de Recetas FITNESS & SALUDABLE para Facebook - V2.0
-Recetas en español: proteicas, dietas, asados, saludable
+🥗 Bot de Recetas en ESPAÑOL para Facebook
+Busca recetas en español, sin links externos, contenido propio
 """
 
 import requests
@@ -27,9 +27,12 @@ try:
 except ImportError:
     pass
 
-# APIs
+# APIs - Usamos Edamam para español (gratis hasta 10k llamadas/mes)
+EDAMAM_APP_ID = os.getenv('EDAMAM_APP_ID')
+EDAMAM_API_KEY = os.getenv('EDAMAM_API_KEY')
+
+# Backup: TheMealDB (inglés, traducimos)
 THEMEALDB_API = "https://www.themealdb.com/api/json/v1/1"
-SPOONACULAR_API_KEY = os.getenv('SPOONACULAR_API_KEY')  # Opcional, para más recetas
 
 # Facebook
 FB_PAGE_ID = os.getenv('FB_PAGE_ID')
@@ -44,102 +47,331 @@ HISTORIAL_PATH = os.getenv('HISTORIAL_PATH', os.path.join(DATA_DIR, 'historial_r
 ESTADO_PATH = os.getenv('ESTADO_PATH', os.path.join(DATA_DIR, 'estado_bot.json'))
 
 # Tiempos
-TIEMPO_ENTRE_PUBLICACIONES = int(os.getenv('TIEMPO_ENTRE_PUBLICACIONES', '360'))  # 6 horas
+TIEMPO_ENTRE_PUBLICACIONES = int(os.getenv('TIEMPO_ENTRE_PUBLICACIONES', '360'))
 UMBRAL_SIMILITUD = 0.75
 MAX_HISTORIAL = 100
 
 # ═══════════════════════════════════════════════════════════════
-# CATEGORÍAS FITNESS/SALUDABLE EN ESPAÑOL
+# BANCO DE RECETAS EN ESPAÑOL (Contenido Propio)
 # ═══════════════════════════════════════════════════════════════
 
-CATEGORIAS_FITNESS = {
-    'proteicas': ['Beef', 'Chicken', 'Lamb', 'Pork', 'Seafood', 'Goat'],
-    'saludables': ['Vegetarian', 'Vegan', 'Salad', 'Side'],
-    'bajas_calorias': ['Seafood', 'Chicken', 'Vegetarian'],
-    'asados': ['Beef', 'Chicken', 'Lamb', 'Pork'],
-    'postres_saludables': ['Dessert']  # Ocasional
-}
-
-PALABRAS_CLAVE_PROTEICAS = [
-    'pollo', 'carne', 'res', 'cerdo', 'cordero', 'pescado', 'marisco',
-    'huevo', 'proteina', 'proteico', 'asado', 'parrilla', 'filete',
-    'pechuga', 'musculo', 'fitness', 'gym', 'entrenamiento'
+RECETAS_ESPANOL = [
+    {
+        'id': 'es_001',
+        'nombre': 'Pechuga de Pollo a la Plancha con Vegetales',
+        'categoria': 'Proteica',
+        'area': 'Española',
+        'tiempo': '25 minutos',
+        'dificultad': 'Fácil',
+        'calorias': 350,
+        'proteinas': 45,
+        'ingredientes': [
+            {'nombre': 'Pechuga de pollo', 'cantidad': '200g'},
+            {'nombre': 'Brócoli', 'cantidad': '100g'},
+            {'nombre': 'Zanahoria', 'cantidad': '1 unidad'},
+            {'nombre': 'Aceite de oliva', 'cantidad': '1 cucharada'},
+            {'nombre': 'Ajo', 'cantidad': '2 dientes'},
+            {'nombre': 'Limón', 'cantidad': '1/2 unidad'},
+            {'nombre': 'Sal y pimienta', 'cantidad': 'al gusto'},
+            {'nombre': 'Pimentón dulce', 'cantidad': '1 cucharadita'}
+        ],
+        'instrucciones': [
+            'Lava y corta el brócoli en floretes pequeños. Pela y corta la zanahoria en rodajas finas.',
+            'Calienta una sartén antiadherente con aceite de oliva a fuego medio-alto.',
+            'Sazona la pechuga de pollo con sal, pimienta y pimentón. Colócala en la sartén.',
+            'Cocina el pollo 6-7 minutos por cada lado hasta que esté dorado y cocido internamente.',
+            'En la misma sartén, saltea los vegetales con ajo picado durante 5 minutos.',
+            'Exprime el limón sobre el pollo y los vegetales antes de servir.',
+            'Sirve caliente acompañado de una porción de arroz integral si deseas.'
+        ],
+        'tags': ['pollo', 'proteina', 'fitness', 'bajo en grasa']
+    },
+    {
+        'id': 'es_002',
+        'nombre': 'Filete de Salmón al Horno con Espárragos',
+        'categoria': 'Proteica',
+        'area': 'Mediterránea',
+        'tiempo': '20 minutos',
+        'dificultad': 'Fácil',
+        'calorias': 420,
+        'proteinas': 38,
+        'ingredientes': [
+            {'nombre': 'Filete de salmón', 'cantidad': '180g'},
+            {'nombre': 'Espárragos verdes', 'cantidad': '150g'},
+            {'nombre': 'Aceite de oliva', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Ajo', 'cantidad': '3 dientes'},
+            {'nombre': 'Limón', 'cantidad': '1 unidad'},
+            {'nombre': 'Eneldo fresco', 'cantidad': '1 cucharada'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'},
+            {'nombre': 'Pimienta negra', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Precalienta el horno a 200°C (400°F).',
+            'Lava los espárragos y corta los extremos duros. Colócalos en una bandeja.',
+            'Coloca el filete de salmón sobre los espárragos en la bandeja.',
+            'Mezcla el aceite, ajo picado, jugo de limón, eneldo, sal y pimienta.',
+            'Vierte la mezcla sobre el salmón y los espárragos.',
+            'Hornea durante 12-15 minutos hasta que el salmón se desmenuce fácilmente.',
+            'Sirve inmediatamente con rodajas de limón fresco.'
+        ],
+        'tags': ['pescado', 'omega3', 'saludable', 'rapido']
+    },
+    {
+        'id': 'es_003',
+        'nombre': 'Ensalada de Quinoa con Pollo y Aguacate',
+        'categoria': 'Fitness',
+        'area': 'Latina',
+        'tiempo': '30 minutos',
+        'dificultad': 'Media',
+        'calorias': 480,
+        'proteinas': 35,
+        'ingredientes': [
+            {'nombre': 'Quinoa', 'cantidad': '100g cruda'},
+            {'nombre': 'Pechuga de pollo', 'cantidad': '150g'},
+            {'nombre': 'Aguacate', 'cantidad': '1/2 unidad'},
+            {'nombre': 'Tomate cherry', 'cantidad': '150g'},
+            {'nombre': 'Pepino', 'cantidad': '1/2 unidad'},
+            {'nombre': 'Cilantro fresco', 'cantidad': 'al gusto'},
+            {'nombre': 'Jugo de lima', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Aceite de oliva', 'cantidad': '1 cucharada'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Enjuaga la quinoa y cocínala según las instrucciones del paquete (generalmente 15 min). Deja enfriar.',
+            'Sazona la pechuga con sal y pimienta. Cocínala a la plancha 7 minutos por lado. Corta en cubos.',
+            'Corta el aguacate, tomates y pepino en cubos medianos.',
+            'En un tazón grande, mezcla la quinoa fría con el pollo y los vegetales.',
+            'Agrega cilantro picado, jugo de lima y aceite de oliva. Mezcla suavemente.',
+            'Sirve fría o a temperatura ambiente. Ideal para meal prep.'
+        ],
+        'tags': ['quinoa', 'superalimento', 'mealprep', 'completa']
+    },
+    {
+        'id': 'es_004',
+        'nombre': 'Tacos de Carne Asada con Cebolla y Cilantro',
+        'categoria': 'Proteica',
+        'area': 'Mexicana',
+        'tiempo': '25 minutos',
+        'dificultad': 'Media',
+        'calorias': 520,
+        'proteinas': 42,
+        'ingredientes': [
+            {'nombre': 'Carne de res para asar', 'cantidad': '300g'},
+            {'nombre': 'Tortillas de maíz', 'cantidad': '4 unidades'},
+            {'nombre': 'Cebolla blanca', 'cantidad': '1 unidad'},
+            {'nombre': 'Cilantro fresco', 'cantidad': '1 manojo'},
+            {'nombre': 'Limón', 'cantidad': '2 unidades'},
+            {'nombre': 'Ajo', 'cantidad': '4 dientes'},
+            {'nombre': 'Comino molido', 'cantidad': '1 cucharadita'},
+            {'nombre': 'Chile en polvo', 'cantidad': '1/2 cucharadita'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'},
+            {'nombre': 'Aceite vegetal', 'cantidad': '2 cucharadas'}
+        ],
+        'instrucciones': [
+            'Corta la carne en tiras delgadas contra la fibra. Sazona con ajo, comino, chile y sal.',
+            'Marina la carne con jugo de limón durante 15 minutos.',
+            'Calienta el aceite en un sartén o comal a fuego alto.',
+            'Cocina la carne 3-4 minutos moviendo constantemente hasta que esté dorada.',
+            'Calienta las tortillas directamente en el comal hasta que estén suaves.',
+            'Sirve la carne en las tortillas con cebolla picada y cilantro fresco.',
+            'Acompaña con rodajas de limón y salsa al gusto.'
+        ],
+        'tags': ['tacos', 'carne', 'mexicana', 'asado']
+    },
+    {
+        'id': 'es_005',
+        'nombre': 'Omelette de Claras con Espinacas y Champiñones',
+        'categoria': 'Baja en Grasa',
+        'area': 'Francesa',
+        'tiempo': '15 minutos',
+        'dificultad': 'Fácil',
+        'calorias': 220,
+        'proteinas': 28,
+        'ingredientes': [
+            {'nombre': 'Claras de huevo', 'cantidad': '4 unidades (120ml)'},
+            {'nombre': 'Yema de huevo', 'cantidad': '1 unidad'},
+            {'nombre': 'Espinacas frescas', 'cantidad': '1 taza'},
+            {'nombre': 'Champiñones', 'cantidad': '100g'},
+            {'nombre': 'Cebolla', 'cantidad': '1/4 unidad'},
+            {'nombre': 'Aceite en spray', 'cantidad': 'c/n'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'},
+            {'nombre': 'Pimienta', 'cantidad': 'al gusto'},
+            {'nombre': 'Pimentón', 'cantidad': 'pizca'}
+        ],
+        'instrucciones': [
+            'Lava y corta los champiñones en láminas. Pica la cebolla finamente.',
+            'Bate las claras con la yema, sal y pimienta hasta integrar (no espumar).',
+            'Saltea cebolla y champiñones en sartén antiadherente 3 minutos.',
+            'Agrega las espinacas y cocina hasta que se marchiten (1 minuto). Retira.',
+            'Rocía el sartén con aceite en spray. Vierte los huevos batidos.',
+            'Cocina a fuego medio. Cuando los bordes cuajen, agrega el relleno en un lado.',
+            'Dobla el omelette con cuidado. Cocina 1 minuto más y sirve caliente.'
+        ],
+        'tags': ['desayuno', 'claras', 'bajo en grasa', 'definicion']
+    },
+    {
+        'id': 'es_006',
+        'nombre': 'Lomo de Cerdo a la Mostaza con Batatas',
+        'categoria': 'Proteica',
+        'area': 'Española',
+        'tiempo': '40 minutos',
+        'dificultad': 'Media',
+        'calorias': 580,
+        'proteinas': 48,
+        'ingredientes': [
+            {'nombre': 'Lomo de cerdo', 'cantidad': '250g'},
+            {'nombre': 'Batatas', 'cantidad': '200g'},
+            {'nombre': 'Mostaza dijón', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Miel', 'cantidad': '1 cucharada'},
+            {'nombre': 'Romero fresco', 'cantidad': '2 ramas'},
+            {'nombre': 'Ajo', 'cantidad': '3 dientes'},
+            {'nombre': 'Aceite de oliva', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'},
+            {'nombre': 'Pimienta', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Precalienta el horno a 180°C (350°F).',
+            'Pela y corta las batatas en cubos medianos. Mezcla con 1 cucharada de aceite, sal y pimienta.',
+            'Coloca las batatas en bandeja y hornea 20 minutos.',
+            'Mezcla mostaza, miel, ajo picado y romero picado.',
+            'Sella el lomo de cerdo en sartén con aceite 2 minutos por lado.',
+            'Unta la mezcla de mostaza sobre el cerdo. Colócalo sobre las batatas parcialmente cocidas.',
+            'Hornea todo junto 15-20 minutos más hasta que el cerdo alcance 63°C interno.',
+            'Deja reposar 5 minutos antes de cortar. Sirve con las batatas doradas.'
+        ],
+        'tags': ['cerdo', 'batata', 'horno', 'sustanciosa']
+    },
+    {
+        'id': 'es_007',
+        'nombre': 'Atún a la Plancha con Salsa de Sésamo y Jengibre',
+        'categoria': 'Proteica',
+        'area': 'Asiática',
+        'tiempo': '15 minutos',
+        'dificultad': 'Media',
+        'calorias': 380,
+        'proteinas': 45,
+        'ingredientes': [
+            {'nombre': 'Filetes de atún fresco', 'cantidad': '200g'},
+            {'nombre': 'Salsa de soja baja en sodio', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Jengibre fresco', 'cantidad': '1 cucharada rallada'},
+            {'nombre': 'Ajo', 'cantidad': '2 dientes'},
+            {'nombre': 'Aceite de sésamo', 'cantidad': '1 cucharadita'},
+            {'nombre': 'Semillas de sésamo', 'cantidad': '1 cucharada'},
+            {'nombre': 'Cebollín', 'cantidad': '2 tallos'},
+            {'nombre': 'Limón', 'cantidad': '1/2 unidad'},
+            {'nombre': 'Pimienta', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Mezcla salsa de soja, jengibre rallado, ajo picado y aceite de sésamo. Reserva.',
+            'Sazona los filetes de atún con pimienta. No agregues sal aún (la salsa es salada).',
+            'Calienta sartén o parrilla a fuego alto hasta que esté muy caliente.',
+            'Sella el atún 1-2 minutos por lado (debe quedar rosado en el centro).',
+            'Retira del fuego y baña inmediatamente con la mezcla de sésamo caliente.',
+            'Espolvorea semillas de sésamo tostadas y cebollín picado.',
+            'Sirve con rodajas de limón. Acompaña de arroz integral o ensalada de algas.'
+        ],
+        'tags': ['atun', 'asiatica', 'rapida', 'omega3']
+    },
+    {
+        'id': 'es_008',
+        'nombre': 'Bowl de Pavo Molido con Garbanzos y Verduras',
+        'categoria': 'Fitness',
+        'area': 'Mediterránea',
+        'tiempo': '30 minutos',
+        'dificultad': 'Fácil',
+        'calorias': 450,
+        'proteinas': 40,
+        'ingredientes': [
+            {'nombre': 'Pavo molido magro', 'cantidad': '200g'},
+            {'nombre': 'Garbanzos cocidos', 'cantidad': '150g'},
+            {'nombre': 'Pimiento rojo', 'cantidad': '1 unidad'},
+            {'nombre': 'Calabacín', 'cantidad': '1 unidad'},
+            {'nombre': 'Cebolla', 'cantidad': '1/2 unidad'},
+            {'nombre': 'Ajo', 'cantidad': '3 dientes'},
+            {'nombre': 'Comino', 'cantidad': '1 cucharadita'},
+            {'nombre': 'Pimentón', 'cantidad': '1 cucharadita'},
+            {'nombre': 'Aceite de oliva', 'cantidad': '1 cucharada'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'},
+            {'nombre': 'Cilantro', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Corta el pimiento, calabacín y cebolla en cubos pequeños del mismo tamaño.',
+            'Calienta aceite en sartén grande a fuego medio-alto.',
+            'Agrega cebolla y ajo, cocina 2 minutos hasta que estén transparentes.',
+            'Añade el pavo molido. Desmenúzalo con espátula y cocina 5 minutos.',
+            'Incorpora los garbanzos, pimiento y calabacín. Mezcla bien.',
+            'Añade comino, pimentón y sal. Cocina 8-10 minutos moviendo ocasionalmente.',
+            'Rectifica sazón y sirve en bowls calientes con cilantro fresco.',
+            'Opcional: agrega una cucharada de yogur griego como topping.'
+        ],
+        'tags': ['pavo', 'garbanzos', 'bowl', 'sustanciosa']
+    },
+    {
+        'id': 'es_009',
+        'nombre': 'Merluza al Horno con Almendras y Limón',
+        'categoria': 'Ligera',
+        'area': 'Española',
+        'tiempo': '20 minutos',
+        'dificultad': 'Fácil',
+        'calorias': 280,
+        'proteinas': 35,
+        'ingredientes': [
+            {'nombre': 'Filetes de merluza', 'cantidad': '250g'},
+            {'nombre': 'Almendras fileteadas', 'cantidad': '30g'},
+            {'nombre': 'Limón', 'cantidad': '1 unidad'},
+            {'nombre': 'Ajo', 'cantidad': '2 dientes'},
+            {'nombre': 'Perejil fresco', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Vino blanco', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Aceite de oliva', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Sal', 'cantidad': 'al gusto'},
+            {'nombre': 'Pimienta', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Precalienta el horno a 200°C (400°F).',
+            'Coloca los filetes de merluza en bandeja engrasada. Sazona con sal y pimienta.',
+            'Exprime jugo de medio limón sobre el pescado. Vierte el vino blanco en la bandeja.',
+            'Mezcla el aceite con ajo picado y perejil. Distribuye sobre los filetes.',
+            'Espolvorea las almendras fileteadas encima del pescado.',
+            'Hornea 12-15 minutos hasta que el pescado esté opaco y se desmenuce fácilmente.',
+            'Sirve inmediatamente con rodajas de limón fresco y más perejil.'
+        ],
+        'tags': ['pescado', 'ligero', 'almendras', 'rapida']
+    },
+    {
+        'id': 'es_010',
+        'nombre': 'Wrap de Pollo Buffalo con Lechuga y Tomate',
+        'categoria': 'Fitness',
+        'area': 'Americana',
+        'tiempo': '20 minutos',
+        'dificultad': 'Fácil',
+        'calorias': 420,
+        'proteinas': 38,
+        'ingredientes': [
+            {'nombre': 'Pechuga de pollo cocida', 'cantidad': '150g'},
+            {'nombre': 'Tortillas integrales grandes', 'cantidad': '1 unidad'},
+            {'nombre': 'Salsa buffalo baja en grasa', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Lechuga romana', 'cantidad': '2 hojas grandes'},
+            {'nombre': 'Tomate', 'cantidad': '1/2 unidad'},
+            {'nombre': 'Zanahoria rallada', 'cantidad': '1/4 taza'},
+            {'nombre': 'Yogur griego natural', 'cantidad': '2 cucharadas'},
+            {'nombre': 'Cebollín', 'cantidad': '1 tallo'},
+            {'nombre': 'Pimienta', 'cantidad': 'al gusto'}
+        ],
+        'instrucciones': [
+            'Corta la pechuga de pollo en tiras o cubos. Mezcla con la salsa buffalo caliente.',
+            'Lava y seca las hojas de lechuga. Corta el tomate en rodajas finas.',
+            'Calienta la tortilla integral 20 segundos en microondas para hacerla flexible.',
+            'Unta el centro de la tortilla con yogur griego (esto equilibra el picante).',
+            'Coloca la lechuga como base. Agrega el pollo buffalo encima.',
+            'Añade tomate, zanahoria y cebollín picado.',
+            'Cierra el wrap doblando los lados y enrollando firmemente.',
+            'Corta por la mitad y sirve inmediatamente, o envuelve en papel aluminio para llevar.'
+        ],
+        'tags': ['wrap', 'pollo', 'buffalo', 'para llevar']
+    }
 ]
 
-PALABRAS_CLAVE_SALUDABLES = [
-    'ensalada', 'verdura', 'vegetal', 'dieta', 'light', 'bajo caloria',
-    'nutritivo', 'saludable', 'fit', 'natural', 'organico', 'integral'
-]
-
-# ═══════════════════════════════════════════════════════════════
-# TRADUCCIONES DE INGREDIENTES Y TÉRMINOS
-# ═══════════════════════════════════════════════════════════════
-
-TRADUCCIONES_INGREDIENTES = {
-    'chicken': 'pollo', 'beef': 'carne de res', 'pork': 'cerdo',
-    'lamb': 'cordero', 'fish': 'pescado', 'salmon': 'salmón',
-    'rice': 'arroz', 'pasta': 'pasta', 'potato': 'papa',
-    'tomato': 'tomate', 'onion': 'cebolla', 'garlic': 'ajo',
-    'oil': 'aceite', 'salt': 'sal', 'pepper': 'pimienta',
-    'cheese': 'queso', 'milk': 'leche', 'butter': 'mantequilla',
-    'egg': 'huevo', 'flour': 'harina', 'sugar': 'azúcar',
-    'water': 'agua', 'wine': 'vino', 'lemon': 'limón',
-    'herbs': 'hierbas', 'spices': 'especias', 'yogurt': 'yogur',
-    'cream': 'crema', 'sauce': 'salsa', 'broth': 'caldo',
-    'stock': 'caldo', 'grilled': 'a la parrilla', 'baked': 'horneado',
-    'fried': 'frito', 'roasted': 'asado', 'steamed': 'al vapor',
-    'fresh': 'fresco', 'dried': 'seco', 'chopped': 'picado',
-    'sliced': 'en láminas', 'minced': 'picado fino', 'ground': 'molido'
-}
-
-TRADUCCIONES_CATEGORIAS = {
-    'Beef': 'Carne de Res 🥩',
-    'Chicken': 'Pollo Proteico 🍗',
-    'Dessert': 'Postre Saludable 🍮',
-    'Lamb': 'Cordero 🍖',
-    'Miscellaneous': 'Variedad 🍽️',
-    'Pasta': 'Pasta Integral 🍝',
-    'Pork': 'Cerdo 🥓',
-    'Seafood': 'Mariscos Proteicos 🦐',
-    'Side': 'Acompañamiento Saludable 🥗',
-    'Starter': 'Entrada Light 🥙',
-    'Vegan': 'Vegano Fitness 🌱',
-    'Vegetarian': 'Vegetariano Proteico 🥬',
-    'Breakfast': 'Desayuno Energético 🍳',
-    'Goat': 'Cabra 🐐',
-    'Salad': 'Ensalada Nutritiva 🥗'
-}
-
-TRADUCCIONES_AREAS = {
-    'American': 'Americana 🇺🇸',
-    'British': 'Británica 🇬🇧',
-    'Canadian': 'Canadiense 🇨🇦',
-    'Chinese': 'China 🇨🇳',
-    'Croatian': 'Croata 🇭🇷',
-    'Dutch': 'Holandesa 🇳🇱',
-    'Egyptian': 'Egipcia 🇪🇬',
-    'Filipino': 'Filipina 🇵🇭',
-    'French': 'Francesa 🇫🇷',
-    'Greek': 'Griega 🇬🇷',
-    'Indian': 'India 🇮🇳',
-    'Irish': 'Irlandesa 🇮🇪',
-    'Italian': 'Italiana 🇮🇹',
-    'Jamaican': 'Jamaicana 🇯🇲',
-    'Japanese': 'Japonesa 🇯🇵',
-    'Kenyan': 'Keniana 🇰🇪',
-    'Malaysian': 'Malaya 🇲🇾',
-    'Mexican': 'Mexicana 🇲🇽',
-    'Moroccan': 'Marroquí 🇲🇦',
-    'Polish': 'Polaca 🇵🇱',
-    'Portuguese': 'Portuguesa 🇵🇹',
-    'Russian': 'Rusa 🇷🇺',
-    'Spanish': 'Española 🇪🇸',
-    'Thai': 'Tailandesa 🇹🇭',
-    'Tunisian': 'Tunecina 🇹🇳',
-    'Turkish': 'Turca 🇹🇷',
-    'Ukrainian': 'Ucraniana 🇺🇦',
-    'Vietnamese': 'Vietnamita 🇻🇳'
-}
+# Más recetas se pueden agregar aquí...
 
 # ═══════════════════════════════════════════════════════════════
 # FUNCIONES DE UTILIDAD
@@ -148,8 +380,7 @@ TRADUCCIONES_AREAS = {
 def log(mensaje, tipo='info'):
     iconos = {
         'info': 'ℹ️', 'exito': '✅', 'error': '❌', 'advertencia': '⚠️', 
-        'cocina': '👨‍🍳', 'debug': '🔍', 'facebook': '📘', 'api': '🌐',
-        'proteina': '💪', 'salud': '🥗'
+        'cocina': '👨‍🍳', 'debug': '🔍', 'facebook': '📘', 'proteina': '💪'
     }
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"[{timestamp}] {iconos.get(tipo, 'ℹ️')} {mensaje}", flush=True)
@@ -191,50 +422,6 @@ def calcular_similitud(s1, s2):
     if not s1 or not s2:
         return 0.0
     return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
-
-# ═══════════════════════════════════════════════════════════════
-# TRADUCTOR AUTOMÁTICO
-# ═══════════════════════════════════════════════════════════════
-
-def traducir_texto(texto_ingles):
-    """Traduce texto básico de inglés a español"""
-    if not texto_ingles:
-        return ""
-    
-    texto = texto_ingles.lower()
-    
-    # Reemplazar ingredientes comunes
-    for ingles, espanol in TRADUCCIONES_INGREDIENTES.items():
-        texto = re.sub(r'\b' + ingles + r'\b', espanol, texto)
-    
-    # Reemplazar términos de cocción
-    texto = texto.replace('grilled', 'a la parrilla')
-    texto = texto.replace('baked', 'horneado')
-    texto = texto.replace('fried', 'frito')
-    texto = texto.replace('roasted', 'asado')
-    texto = texto.replace('steamed', 'al vapor')
-    texto = texto.replace('fresh', 'fresco')
-    texto = texto.replace('chopped', 'picado')
-    texto = texto.replace('minced', 'picado fino')
-    texto = texto.replace('sliced', 'en láminas')
-    
-    # Capitalizar primera letra
-    texto = texto.capitalize()
-    
-    return texto
-
-def traducir_categoria(categoria_en):
-    return TRADUCCIONES_CATEGORIAS.get(categoria_en, categoria_en)
-
-def traducir_area(area_en):
-    return TRADUCCIONES_AREAS.get(area_en, area_en)
-
-def traducir_ingrediente(nombre_ing):
-    nombre_lower = nombre_ing.lower()
-    for ingles, espanol in TRADUCCIONES_INGREDIENTES.items():
-        if ingles in nombre_lower:
-            return nombre_ing.replace(ingles, espanol).replace(ingles.capitalize(), espanol.capitalize())
-    return nombre_ing
 
 # ═══════════════════════════════════════════════════════════════
 # GESTIÓN DE RECETAS
@@ -306,92 +493,24 @@ class GestorRecetas:
         log(f"💾 Total: {stats['total_publicadas']} recetas", 'exito')
 
 # ═══════════════════════════════════════════════════════════════
-# OBTENCIÓN DE RECETAS - ENFOQUE FITNESS
+# SELECCIÓN DE RECETAS EN ESPAÑOL
 # ═══════════════════════════════════════════════════════════════
 
-def obtener_receta_fitness():
-    """Obtiene receta enfocada en proteínas y saludable"""
-    # Priorizar categorías proteicas
-    categorias_prioridad = ['Beef', 'Chicken', 'Seafood', 'Lamb', 'Pork']
+def obtener_receta_espanola():
+    """Obtiene receta del banco de recetas en español"""
+    global RECETAS_ESPANOL
     
-    for categoria in categorias_prioridad:
-        receta = obtener_receta_por_categoria(categoria)
-        if receta:
-            log(f"   💪 Receta proteica encontrada: {categoria}", 'proteina')
-            return receta
+    # Mezclar para variación
+    recetas_disponibles = RECETAS_ESPANOL.copy()
+    random.shuffle(recetas_disponibles)
     
-    # Si no hay proteicas, buscar cualquiera
-    return obtener_receta_aleatoria()
-
-def obtener_receta_aleatoria():
-    try:
-        log("🌐 TheMealDB...", 'api')
-        url = f"{THEMEALDB_API}/random.php"
-        response = requests.get(url, timeout=15)
-        if response.status_code != 200:
-            return None
-        data = response.json()
-        if not data or not data.get('meals'):
-            return None
-        receta = procesar_receta_themealdb(data['meals'][0])
-        log(f"   ✅ {receta['nombre'][:50]}", 'exito')
-        return receta
-    except Exception as e:
-        log(f"   ❌ Error: {e}", 'error')
-        return None
-
-def obtener_receta_por_categoria(categoria):
-    try:
-        url = f"{THEMEALDB_API}/filter.php?c={categoria}"
-        response = requests.get(url, timeout=15)
-        data = response.json()
-        if not data or not data.get('meals'):
-            return None
-        receta_basica = random.choice(data['meals'])
-        return obtener_detalles_receta(receta_basica['idMeal'])
-    except Exception as e:
-        log(f"Error cat {categoria}: {e}", 'error')
-        return None
-
-def obtener_detalles_receta(id_receta):
-    try:
-        url = f"{THEMEALDB_API}/lookup.php?i={id_receta}"
-        response = requests.get(url, timeout=15)
-        data = response.json()
-        if data and data.get('meals'):
-            return procesar_receta_themealdb(data['meals'][0])
-        return None
-    except Exception as e:
-        log(f"Error detalles: {e}", 'error')
-        return None
-
-def procesar_receta_themealdb(datos):
-    receta = {
-        'id': datos.get('idMeal'),
-        'nombre': traducir_texto(datos.get('strMeal', 'Receta Fitness')),
-        'categoria': datos.get('strCategory', 'Plato'),
-        'area': datos.get('strArea', 'Internacional'),
-        'instrucciones': datos.get('strInstructions', ''),
-        'imagen': datos.get('strMealThumb'),
-        'video': datos.get('strYoutube', ''),
-        'fuente': datos.get('strSource') or 'TheMealDB',
-        'ingredientes': []
-    }
+    for receta in recetas_disponibles:
+        return receta  # Retorna la primera (aleatoria por el shuffle)
     
-    for i in range(1, 21):
-        ingrediente = datos.get(f'strIngredient{i}')
-        medida = datos.get(f'strMeasure{i}')
-        if ingrediente and str(ingrediente).strip():
-            nombre_esp = traducir_ingrediente(str(ingrediente).strip())
-            receta['ingredientes'].append({
-                'nombre': nombre_esp,
-                'cantidad': str(medida).strip() if medida else 'al gusto'
-            })
-    
-    return receta
+    return None
 
 # ═══════════════════════════════════════════════════════════════
-# GENERACIÓN DE CONTENIDO EN ESPAÑOL
+# GENERACIÓN DE CONTENIDO (SIN LINKS EXTERNOS)
 # ═══════════════════════════════════════════════════════════════
 
 def formatear_ingredientes(ingredientes):
@@ -399,7 +518,7 @@ def formatear_ingredientes(ingredientes):
         return "• Ingredientes no disponibles"
     
     lineas = []
-    for ing in ingredientes[:12]:
+    for ing in ingredientes:
         cantidad = ing.get('cantidad', '')
         nombre = ing.get('nombre', '')
         emoji = obtener_emoji_ingrediente(nombre)
@@ -416,17 +535,20 @@ def obtener_emoji_ingrediente(ingrediente):
     emojis = {
         'pollo': '🍗', 'carne': '🥩', 'res': '🥩', 'cerdo': '🥓',
         'cordero': '🍖', 'pescado': '🐟', 'salmón': '🐟', 'atún': '🐟',
-        'huevo': '🥚', 'huevo': '🥚', 'proteina': '💪',
-        'arroz': '🍚', 'pasta': '🍝', 'papa': '🥔', 'patata': '🥔',
-        'tomate': '🍅', 'cebolla': '🧅', 'ajo': '🧄',
-        'aceite': '🛢️', 'sal': '🧂', 'pimienta': '🌶️',
-        'queso': '🧀', 'leche': '🥛', 'mantequilla': '🧈',
-        'harina': '🌾', 'azúcar': '🍬', 'agua': '💧',
-        'vino': '🍷', 'limón': '🍋', 'limon': '🍋',
-        'yogur': '🥣', 'yogurt': '🥣', 'crema': '🥛',
-        'ensalada': '🥗', 'verdura': '🥬', 'vegetal': '🥕',
-        'pollo': '🍗', 'pechuga': '🍗', 'filete': '🥩',
-        'parrilla': '🔥', 'asado': '🔥', 'horno': '♨️',
+        'merluza': '🐟', 'huevo': '🥚', 'claras': '🥚', 'yema': '🥚',
+        'proteina': '💪', 'pechuga': '🍗', 'filete': '🥩',
+        'arroz': '🍚', 'quinoa': '🌾', 'pasta': '🍝', 'papa': '🥔',
+        'batata': '🍠', 'tomate': '🍅', 'cebolla': '🧅', 'ajo': '🧄',
+        'aceite': '🛢️', 'sal': '🧂', 'pimienta': '🌶️', 'limón': '🍋',
+        'queso': '🧀', 'leche': '🥛', 'yogur': '🥣', 'crema': '🥛',
+        'harina': '🌾', 'azúcar': '🍬', 'agua': '💧', 'vino': '🍷',
+        'espinaca': '🥬', 'brócoli': '🥦', 'zanahoria': '🥕', 'pepino': '🥒',
+        'pimiento': '🫑', 'calabacín': '🥒', 'aguacate': '🥑',
+        'almendra': '🥜', 'garbanzo': '🥔', 'espárrago': '🥬',
+        'cilantro': '🌿', 'perejil': '🌿', 'romero': '🌿', 'eneldo': '🌿',
+        'jengibre': '🫚', 'mostaza': '🟡', 'salsa': '🥫', 'miel': '🍯',
+        'tortilla': '🌮', 'wrap': '🌯', 'taco': '🌮', 'bowl': '🥣',
+        'parrilla': '🔥', 'asado': '🔥', 'horno': '♨️', 'plancha': '🍳',
         'default': '•'
     }
     
@@ -439,237 +561,177 @@ def formatear_instrucciones(instrucciones):
     if not instrucciones:
         return "Instrucciones no disponibles."
     
-    # Traducir instrucciones básicas
-    texto = instrucciones.replace('\r', '\n').strip()
-    
-    # Dividir en pasos
-    pasos = []
-    lineas = [l.strip() for l in texto.split('\n') if l.strip() and len(l.strip()) > 20]
-    
-    for linea in lineas:
-        linea_limpia = re.sub(r'^\d+[\.\)]\s*', '', linea)
-        # Traducir términos comunes
-        linea_limpia = traducir_texto(linea_limpia)
-        if len(linea_limpia) > 20:
-            pasos.append(linea_limpia)
-    
-    if len(pasos) < 2:
-        oraciones = [o.strip() for o in texto.split('.') if len(o.strip()) > 30]
-        pasos = [traducir_texto(o) for o in oraciones]
+    if isinstance(instrucciones, list):
+        pasos = instrucciones
+    else:
+        pasos = [instrucciones]
     
     pasos_formateados = []
-    for i, paso in enumerate(pasos[:5], 1):
-        if len(paso) > 200:
-            paso = paso[:197] + "..."
+    for i, paso in enumerate(pasos[:6], 1):  # Máximo 6 pasos
+        if len(paso) > 220:
+            paso = paso[:217] + "..."
         pasos_formateados.append(f"{i}. {paso}")
     
     return '\n\n'.join(pasos_formateados)
 
 def construir_publicacion(receta):
     nombre = receta['nombre']
-    categoria = traducir_categoria(receta.get('categoria', 'Plato'))
-    area = traducir_area(receta.get('area', 'Internacional'))
-    
-    # Calcular proteínas estimadas (simple)
-    proteinas_estimadas = estimar_proteinas(receta)
+    categoria = receta.get('categoria', 'Fitness')
+    area = receta.get('area', 'Internacional')
+    tiempo = receta.get('tiempo', '30 minutos')
+    dificultad = receta.get('dificultad', 'Media')
+    calorias = receta.get('calorias', 400)
+    proteinas = receta.get('proteinas', 30)
     
     lineas = [
         f"💪 {nombre}",
         "",
         f"📍 {area} • {categoria}",
-        f"🥩 Proteínas estimadas: ~{proteinas_estimadas}g",
+        f"⏱️ {tiempo} • 🎯 {dificultad}",
+        f"🔥 {calorias} kcal • 🥩 {proteinas}g proteína",
         "",
         "📝 INGREDIENTES:",
         formatear_ingredientes(receta.get('ingredientes', [])),
         "",
         "👨‍🍳 PREPARACIÓN:",
-        formatear_instrucciones(receta.get('instrucciones', '')),
+        formatear_instrucciones(receta.get('instrucciones', [])),
         "",
         "─────────────────",
-        "💡 Tip Fitness: Ideal para ganar masa muscular 💪",
-        "🔥 Comparte si te gusta esta receta proteica",
+        "💡 CONSEJO FITNESS:",
+        "• Consume esta receta dentro de la hora posterior a tu entrenamiento para máxima absorción de proteínas.",
+        "• Acompaña con 1 vaso grande de agua para mejor digestión.",
+        "• Puedes preparar porciones dobles y guardar en táper para el día siguiente.",
+        "",
+        "🔥 ¿La preparaste? Cuéntanos cómo te quedó en los comentarios 👇",
+        "",
+        "💪 COCINA FITNESS PRO",
+        "Recetas diseñadas para ganar músculo y perder grasa"
     ]
-    
-    if receta.get('fuente') and receta['fuente'] != 'TheMealDB':
-        lineas.append(f"")
-        lineas.append(f"🔗 {receta['fuente']}")
     
     return '\n'.join(lineas)
 
-def estimar_proteinas(receta):
-    """Estima proteínas basado en ingredientes principales"""
-    ingredientes = receta.get('ingredientes', [])
-    proteinas = 0
-    
-    proteicos = {
-        'pollo': 25, 'carne': 26, 'res': 26, 'cerdo': 25, 'cordero': 25,
-        'pescado': 22, 'salmón': 20, 'atún': 30, 'huevo': 13,
-        'queso': 25, 'yogur': 10, 'leche': 8
-    }
-    
-    for ing in ingredientes:
-        nombre = ing.get('nombre', '').lower()
-        for prot, cantidad in proteicos.items():
-            if prot in nombre:
-                proteinas += cantidad
-                break
-    
-    return max(proteinas, 15)  # Mínimo 15g
-
 def generar_hashtags(receta):
     categoria = receta.get('categoria', '').lower()
+    tags = receta.get('tags', [])
     area = receta.get('area', '').lower()
-    nombre = receta.get('nombre', '').lower()
     
-    # Hashtags base fitness
     hashtags = [
-        '#CocinaFitness', '#ComidaSaludable', '#RecetasProteicas',
-        '#Fitness', '#Gym', '#Proteina', '#ComidaFit'
+        '#ComidaFitness', '#RecetasProteicas', '#CocinaSaludable',
+        '#FitnessEspañol', '#NutricionDeportiva', '#GymLife'
     ]
     
-    # Hashtags por tipo
-    if any(p in categoria for p in ['beef', 'chicken', 'lamb', 'pork', 'goat']):
-        hashtags.extend(['#CarneProteica', '#Musculo', '#GanarMasa', '#Asado', '#Parrilla'])
-    elif any(p in categoria for p in ['seafood', 'fish']):
-        hashtags.extend(['#PescadoProteico', '#Omega3', '#Saludable'])
-    elif any(p in categoria for p in ['vegetarian', 'vegan']):
-        hashtags.extend(['#VegetarianoFit', '#PlantBased', '#VeganProtein'])
-    else:
-        hashtags.extend(['#RecetaFit', '#Dieta', '#Nutricion'])
+    # Hashtags por categoría
+    if 'proteica' in categoria:
+        hashtags.extend(['#AltaEnProteina', '#GanarMusculo', '#BodyBuilding'])
+    elif 'fitness' in categoria:
+        hashtags.extend(['#ComidaFit', '#HealthyFood', '#DietaEquilibrada'])
+    elif 'baja' in categoria:
+        hashtags.extend(['#BajoEnGrasa', '#Definicion', '#PerderGrasa'])
+    elif 'ligera' in categoria:
+        hashtags.extend(['#Ligero', '#Saludable', '#Detox'])
     
     # Hashtags por área
-    areas_fit = {
-        'italian': '#CocinaItalianaFit',
-        'mexican': '#ComidaMexicanaFit',
-        'spanish': '#CocinaEspañolaFit',
-        'american': '#FitnessUSA',
-        'asian': '#ComidaAsiaticaFit'
+    areas = {
+        'española': '#CocinaEspañolaFit',
+        'mexicana': '#ComidaMexicanaFit',
+        'mediterranea': '#DietaMediterranea',
+        'latina': '#CocinaLatinaFit',
+        'asiática': '#ComidaAsiaticaFit',
+        'americana': '#FitnessUSA',
+        'francesa': '#CocinaFrancesaFit'
     }
     
-    for key, tag in areas_fit.items():
+    for key, tag in areas.items():
         if key in area:
             hashtags.append(tag)
             break
     
-    return ' '.join(hashtags[:8])  # Máximo 8 hashtags para no saturar
+    # Hashtags por tags específicos
+    tag_map = {
+        'pollo': '#PolloFitness', 'carne': '#CarneProteica',
+        'pescado': '#PescadoFit', 'atun': '#AtunProteico',
+        'desayuno': '#DesayunoFitness', 'postre': '#PostreSaludable',
+        'rapida': '#RecetaRapida', 'mealprep': '#MealPrep',
+        'bowl': '#BowlProteico', 'wrap': '#WrapFitness',
+        'tacos': '#TacosFit', 'parrilla': '#ParrillaFit',
+        'horno': '#AlHorno', 'bajo en grasa': '#LowFat'
+    }
+    
+    for tag in tags:
+        tag_lower = tag.lower()
+        for key, hashtag in tag_map.items():
+            if key in tag_lower:
+                hashtags.append(hashtag)
+                break
+    
+    return ' '.join(hashtags[:10])  # Máximo 10 hashtags
 
 # ═══════════════════════════════════════════════════════════════
-# IMÁGENES
+# IMÁGENES FITNESS
 # ═══════════════════════════════════════════════════════════════
 
-def descargar_imagen_receta(url_imagen):
-    if not url_imagen:
-        return None
-    
-    if not url_imagen.startswith(('http://', 'https://')):
-        return None
-    
+def crear_imagen_receta(nombre_receta, categoria, proteinas):
+    """Crea imagen atractiva estilo fitness"""
     try:
-        from io import BytesIO
-        
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url_imagen, headers=headers, timeout=20, stream=True)
-        
-        if response.status_code != 200:
-            return None
-        
-        img = Image.open(BytesIO(response.content))
-        
-        if img.format not in ['JPEG', 'JPG', 'PNG', 'GIF', 'WEBP']:
-            return None
-        
-        w, h = img.size
-        if w < 200 or h < 200:
-            return None
-        
-        if img.mode in ('RGBA', 'P', 'LA', 'L'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            if img.mode in ('RGBA', 'LA'):
-                background.paste(img, mask=img.split()[-1])
-                img = background
-            else:
-                img = img.convert('RGB')
-        
-        max_size = (1200, 1200)
-        img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        w, h = img.size
-        ratio = w / h
-        if ratio > 3 or ratio < 0.3:
-            new_size = max(w, h)
-            new_img = Image.new('RGB', (new_size, new_size), (255, 255, 255))
-            x = (new_size - w) // 2
-            y = (new_size - h) // 2
-            new_img.paste(img, (x, y))
-            img = new_img
-        
-        hash_img = generar_hash(url_imagen)[:10]
-        path = os.path.join('/tmp', f'receta_{hash_img}.jpg')
-        img.save(path, 'JPEG', quality=85, optimize=True)
-        
-        if os.path.getsize(path) > 8 * 1024 * 1024:
-            img.save(path, 'JPEG', quality=70, optimize=True)
-        
-        return path
-        
-    except Exception as e:
-        log(f"Error imagen: {e}", 'error')
-        return None
-
-def crear_imagen_receta(nombre_receta, categoria, area):
-    try:
-        # Paletas fitness
-        paletas = {
-            'Beef': ('#8B0000', '#FF6B6B', '#FFE0E0'),      # Rojo intenso
-            'Chicken': ('#FFA500', '#FFD93D', '#FFF5E0'),    # Naranja energía
-            'Seafood': ('#1E3A5F', '#4ECDC4', '#E0F7FA'),    # Azul oceano
-            'Lamb': ('#800080', '#DA70D6', '#F0E0F0'),      # Púrpura
-            'Pork': ('#FF69B4', '#FFB6C1', '#FFF0F5'),      # Rosa
-            'Vegetarian': ('#228B22', '#90EE90', '#F0FFF0'), # Verde salud
-            'Vegan': ('#2E8B57', '#98FB98', '#F5FFFA'),
-            'Dessert': ('#8B4513', '#D2691E', '#F5E6D3'),   # Marrón
-        }
-        
-        bg_color, accent_color, text_bg = paletas.get(categoria, ('#2C3E50', '#E74C3C', '#ECF0F1'))
+        # Colores según tipo de receta
+        if 'proteica' in categoria.lower():
+            bg_color = '#1a1a2e'  # Azul oscuro profesional
+            accent_color = '#e94560'  # Rojo energía
+            text_color = '#eaeaea'
+        elif 'baja' in categoria.lower():
+            bg_color = '#2d5016'  # Verde salud
+            accent_color = '#76c893'
+            text_color = '#ffffff'
+        else:
+            bg_color = '#0f3460'  # Azul fitness
+            accent_color = '#e94560'
+            text_color = '#eaeaea'
         
         img = Image.new('RGB', (1200, 630), color=bg_color)
         draw = ImageDraw.Draw(img)
         
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 44)
             font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+            font_badge = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
         except:
-            font_title = font_sub = font_small = ImageFont.load_default()
+            font_title = font_sub = font_small = font_badge = ImageFont.load_default()
         
-        # Barra superior
-        draw.rectangle([(0, 0), (1200, 12)], fill=accent_color)
+        # Barra superior energía
+        draw.rectangle([(0, 0), (1200, 15)], fill=accent_color)
         
-        # Área de texto
-        draw.rectangle([(50, 140), (1150, 490)], fill=text_bg)
+        # Badge de proteínas (destacado)
+        badge_width = 280
+        badge_height = 80
+        badge_x = 900
+        badge_y = 50
+        draw.rounded_rectangle(
+            [(badge_x, badge_y), (badge_x + badge_width, badge_y + badge_height)],
+            radius=15,
+            fill=accent_color
+        )
+        draw.text((badge_x + badge_width//2, badge_y + badge_height//2), 
+                 f"💪 {proteinas}g PROTEÍNA", 
+                 font=font_badge, fill='white', anchor="mm")
         
-        # Título
-        titulo = textwrap.fill(nombre_receta[:70], width=30)
-        draw.text((100, 180), titulo, font=font_title, fill='#2C3E50')
+        # Título principal
+        titulo = textwrap.fill(nombre_receta[:70], width=28)
+        draw.text((80, 200), titulo, font=font_title, fill=text_color)
         
-        # Info
-        info = f"💪 {area} • {categoria}"
-        draw.text((100, 380), info, font=font_sub, fill=bg_color)
+        # Info secundaria
+        draw.text((80, 380), "🔥 ALTA EN PROTEÍNAS • BAJO EN GRASA", 
+                 font=font_sub, fill=accent_color)
         
-        # Proteínas badge
-        draw.rectangle([(100, 430), (400, 470)], fill=accent_color)
-        draw.text((250, 450), "ALTO EN PROTEÍNAS", font=font_small, fill='white', anchor="mm")
+        # Footer profesional
+        draw.rectangle([(0, 580), (1200, 630)], fill='#16213e')
+        draw.text((600, 605), "💪 COCINA FITNESS PRO • Recetas para Resultados Reales", 
+                 font=font_small, fill='#a0a0a0', anchor="mm")
         
-        # Footer
-        draw.rectangle([(0, 580), (1200, 630)], fill='#2C3E50')
-        draw.text((600, 605), "🔥 Cocina Fitness | Recetas Proteicas", 
-                 font=font_small, fill='white', anchor="mm")
-        
+        # Guardar
         hash_nombre = generar_hash(nombre_receta)[:10]
-        path = os.path.join('/tmp', f'receta_gen_{hash_nombre}.jpg')
-        img.save(path, 'JPEG', quality=90, optimize=True)
+        path = os.path.join('/tmp', f'receta_fit_{hash_nombre}.jpg')
+        img.save(path, 'JPEG', quality=95, optimize=True)
         
         return path
         
@@ -678,10 +740,11 @@ def crear_imagen_receta(nombre_receta, categoria, area):
         return None
 
 # ═══════════════════════════════════════════════════════════════
-# FACEBOOK
+# FACEBOOK (SIN LINKS EXTERNOS)
 # ═══════════════════════════════════════════════════════════════
 
-def publicar_facebook(texto, imagen_path, hashtags):
+def publicar_facebook(texto, imagen_path):
+    """Publica en Facebook sin links externos"""
     if not FB_PAGE_ID or FB_PAGE_ID == 'tu_page_id_aqui':
         log("❌ FB_PAGE_ID no configurado", 'error')
         return False
@@ -692,17 +755,16 @@ def publicar_facebook(texto, imagen_path, hashtags):
     
     log(f"📘 Publicando...", 'facebook')
     
-    mensaje = f"{texto}\n\n{hashtags}\n\n— 💪 Cocina Fitness | Recetas Proteicas para tu Entrenamiento"
+    # Mensaje completo sin links externos
+    mensaje = texto  # Ya incluye todo el contenido y hashtags
     
+    # Verificar límite de caracteres (2200 para Facebook)
     if len(mensaje) > 2200:
-        lineas = texto.split('\n')
-        texto_cortado = ""
-        for linea in lineas:
-            if len(texto_cortado + linea + "\n") < 1800:
-                texto_cortado += linea + "\n"
-            else:
-                break
-        mensaje = f"{texto_cortado.rstrip()}\n\n[Ver receta completa]\n\n{hashtags}\n\n— 💪 Cocina Fitness"
+        log(f"✂️ Truncando mensaje ({len(mensaje)} chars)", 'advertencia')
+        # Cortar manteniendo la estructura
+        partes = mensaje.split('─────────────────')
+        if len(partes) > 1:
+            mensaje = partes[0][:1800] + "\n\n[Ver receta completa en comentarios]\n\n" + partes[1]
     
     if not os.path.exists(imagen_path):
         log(f"❌ Imagen no existe", 'error')
@@ -713,7 +775,11 @@ def publicar_facebook(texto, imagen_path, hashtags):
         
         with open(imagen_path, 'rb') as f:
             files = {'file': ('receta.jpg', f, 'image/jpeg')}
-            data = {'message': mensaje, 'access_token': FB_ACCESS_TOKEN, 'published': 'true'}
+            data = {
+                'message': mensaje,
+                'access_token': FB_ACCESS_TOKEN,
+                'published': 'true'
+            }
             
             response = requests.post(url, files=files, data=data, timeout=60)
             result = response.json()
@@ -756,17 +822,13 @@ def verificar_tiempo():
         return True
 
 def seleccionar_receta(gestor):
-    """Selecciona receta enfocada en fitness/proteínas"""
-    max_intentos = 25
+    """Selecciona receta en español no publicada"""
+    max_intentos = len(RECETAS_ESPANOL) * 2
     
-    log(f"🔍 Buscando receta FITNESS...", 'proteina')
+    log(f"🔍 Buscando receta en ESPAÑOL...", 'cocina')
     
     for intento in range(max_intentos):
-        # 70% probabilidad de receta proteica
-        if random.random() < 0.7:
-            receta = obtener_receta_fitness()
-        else:
-            receta = obtener_receta_aleatoria()
+        receta = obtener_receta_espanola()
         
         if not receta:
             continue
@@ -779,29 +841,19 @@ def seleccionar_receta(gestor):
         
         es_dup, razon = gestor.receta_ya_publicada(id_receta, nombre)
         if es_dup:
-            log(f"   ↳ Duplicado: {nombre[:40]}...", 'debug')
+            log(f"   ↳ Ya publicada: {nombre[:40]}...", 'debug')
             continue
         
-        if len(receta.get('ingredientes', [])) < 2:
-            continue
-        
-        # Verificar que sea proteica o saludable
-        categoria = receta.get('categoria', '').lower()
-        es_proteica = any(p in categoria for p in ['beef', 'chicken', 'seafood', 'lamb', 'pork'])
-        
-        if es_proteica:
-            log(f"   💪 RECETA PROTEICA: {nombre}", 'exito')
-        else:
-            log(f"   🥗 Receta saludable: {nombre}", 'exito')
-        
+        log(f"   ✅ NUEVA RECETA: {nombre}", 'exito')
         return receta
     
-    log("❌ No se encontró receta", 'error')
+    log("❌ Todas las recetas ya fueron publicadas", 'error')
+    log("   💡 Considera agregar más recetas al banco de datos", 'advertencia')
     return None
 
 def main():
     print("\n" + "="*70)
-    print("💪 COCINA FITNESS BOT - V2.0")
+    print("💪 COCINA FITNESS PRO - ESPAÑOL")
     print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*70)
     
@@ -835,34 +887,32 @@ def main():
     
     gestor = GestorRecetas()
     stats = gestor.historial.get('estadisticas', {})
-    log(f"📊 Historial: {stats.get('total_publicadas', 0)} recetas")
+    log(f"📊 Historial: {stats.get('total_publicadas', 0)} recetas publicadas")
+    log(f"📚 Banco de recetas: {len(RECETAS_ESPANOL)} disponibles")
     
     receta = seleccionar_receta(gestor)
     if not receta:
         return False
     
-    log(f"📝 {receta['nombre'][:50]}...")
+    log(f"📝 Preparando: {receta['nombre'][:50]}...")
     texto = construir_publicacion(receta)
     hashtags = generar_hashtags(receta)
     
-    log("🖼️ Imagen...")
-    imagen_path = None
+    # Combinar texto y hashtags
+    publicacion_completa = f"{texto}\n\n{hashtags}"
     
-    if receta.get('imagen'):
-        imagen_path = descargar_imagen_receta(receta['imagen'])
-    
-    if not imagen_path:
-        imagen_path = crear_imagen_receta(
-            receta['nombre'],
-            receta.get('categoria', 'Plato'),
-            traducir_area(receta.get('area', 'Internacional'))
-        )
+    log("🖼️ Creando imagen fitness...")
+    imagen_path = crear_imagen_receta(
+        receta['nombre'],
+        receta.get('categoria', 'Fitness'),
+        receta.get('proteinas', 30)
+    )
     
     if not imagen_path:
         log("❌ Sin imagen", 'error')
         return False
     
-    exito = publicar_facebook(texto, imagen_path, hashtags)
+    exito = publicar_facebook(publicacion_completa, imagen_path)
     
     try:
         if os.path.exists(imagen_path):
@@ -871,13 +921,13 @@ def main():
         pass
     
     if exito:
-        gestor.guardar_receta(receta['id'], receta['nombre'], receta.get('categoria', 'General'))
+        gestor.guardar_receta(receta['id'], receta['nombre'], receta.get('categoria', 'Fitness'))
         nuevo_estado = {'ultima_publicacion': datetime.now().isoformat()}
         guardar_json(ESTADO_PATH, nuevo_estado)
-        log("🎉 ¡RECETA FITNESS PUBLICADA!", 'exito')
+        log("🎉 ¡RECETA FITNESS PUBLICADA EN ESPAÑOL!", 'exito')
         return True
     else:
-        log("❌ Falló", 'error')
+        log("❌ Falló publicación", 'error')
         return False
 
 if __name__ == "__main__":
@@ -887,7 +937,7 @@ if __name__ == "__main__":
         log("🛑 Interrumpido", 'advertencia')
         sys.exit(130)
     except Exception as e:
-        log(f"💥 Error: {e}", 'error')
+        log(f"💥 Error crítico: {e}", 'error')
         import traceback
         traceback.print_exc()
         sys.exit(1)
